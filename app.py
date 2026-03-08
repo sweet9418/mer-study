@@ -31,6 +31,15 @@ def load_user(user_id):
 
 with app.app_context():
     db.create_all()
+    # Add missing columns to existing tables
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+    if 'study_post' in inspector.get_table_names():
+        columns = [c['name'] for c in inspector.get_columns('study_post')]
+        if 'is_shared' not in columns:
+            with db.engine.connect() as conn:
+                conn.execute(text('ALTER TABLE study_post ADD COLUMN is_shared BOOLEAN DEFAULT FALSE'))
+                conn.commit()
 
 
 # ─── Auth Routes ────────────────────────────────────────
