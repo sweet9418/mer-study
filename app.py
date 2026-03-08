@@ -1,10 +1,10 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, StudyPost
+from models import db, User, StudyPost, QAEntry
 from crawler import crawl_url
-from ai_helper import generate_summary, generate_study_notes, suggest_tags
+from ai_helper import generate_summary, generate_study_notes, suggest_tags, answer_question
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -104,26 +104,37 @@ def logout():
 
 @app.route('/')
 def index():
-    page = request.args.get('page', 1, type=int)
-    search = request.args.get('search', '').strip()
-
     if current_user.is_authenticated:
-        query = StudyPost.query.filter_by(user_id=current_user.id)
-        if search:
-            query = query.filter(
-                db.or_(
-                    StudyPost.title.ilike(f'%{search}%'),
-                    StudyPost.tags.ilike(f'%{search}%'),
-                    StudyPost.study_notes.ilike(f'%{search}%')
-                )
-            )
-        posts = query.order_by(StudyPost.created_at.desc()).paginate(
-            page=page, per_page=10, error_out=False
-        )
-    else:
-        posts = None
+        return redirect(url_for('workspace'))
+    return render_template('index.html')
 
-    return render_template('index.html', posts=posts, search=search)
+
+@app.route('/workspace')
+@login_required
+def workspace():
+    posts = StudyPost.query.filter_by(user_id=current_user.id).order_by(
+        StudyPost.created_at.desc()
+    ).all()
+
+    post_id = request.args.get('post_id', type=int)
+    active_post = None
+    qa_entries = []
+
+    if post_id:
+        active_post = StudyPost.query.get(post_id)
+        if active_post and active_post.user_id != current_user.id:
+            active_post = None
+        if active_post:
+            qa_entries = QAEntry.query.filter_by(post_id=active_post.id).order_by(
+                QAEntry.created_at.desc()
+            ).all()
+    elif posts:
+        active_post = posts[0]
+        qa_entries = QAEntry.query.filter_by(post_id=active_post.id).order_by(
+            QAEntry.created_at.desc()
+        ).all()
+
+    return render_template('workspace.html', posts=posts, active_post=active_post, qa_entries=qa_entries)
 
 
 @app.route('/add', methods=['GET', 'POST'])
@@ -137,7 +148,6 @@ def add_post():
         original_content = ''
         summary = ''
 
-        # If URL provided, crawl it
         if source_url:
             result = crawl_url(source_url)
             if result['success']:
@@ -145,8 +155,6 @@ def add_post():
                 if not title:
                     title = result['title']
                 summary = generate_summary(original_content)
-                if not study_notes:
-                    study_notes = generate_study_notes(original_content, title)
                 if not tags:
                     suggested = suggest_tags(original_content, title)
                     tags = ', '.join(suggested)
@@ -169,27 +177,10 @@ def add_post():
         db.session.add(post)
         db.session.commit()
 
-        flash('학습 노트가 저장되었습니다!', 'success')
-        return redirect(url_for('study', post_id=post.id))
+        flash('글이 추가되었습니다!', 'success')
+        return redirect(url_for('workspace', post_id=post.id))
 
     return render_template('add_post.html')
-
-
-@app.route('/study/<int:post_id>', methods=['GET', 'POST'])
-@login_required
-def study(post_id):
-    post = StudyPost.query.get_or_404(post_id)
-    if post.user_id != current_user.id:
-        flash('접근 권한이 없습니다.', 'error')
-        return redirect(url_for('index'))
-
-    if request.method == 'POST':
-        post.study_notes = request.form.get('study_notes', '')
-        post.tags = request.form.get('tags', '')
-        db.session.commit()
-        flash('노트가 업데이트되었습니다!', 'success')
-
-    return render_template('study.html', post=post)
 
 
 @app.route('/delete/<int:post_id>', methods=['POST'])
@@ -198,12 +189,106 @@ def delete_post(post_id):
     post = StudyPost.query.get_or_404(post_id)
     if post.user_id != current_user.id:
         flash('접근 권한이 없습니다.', 'error')
-        return redirect(url_for('index'))
+        return redirect(url_for('workspace'))
 
+    QAEntry.query.filter_by(post_id=post.id).delete()
     db.session.delete(post)
     db.session.commit()
     flash('삭제되었습니다.', 'success')
-    return redirect(url_for('index'))
+    return redirect(url_for('workspace'))
+
+
+# ─── API Routes (AJAX) ─────────────────────────────────
+
+@app.route('/api/ask', methods=['POST'])
+@login_required
+def api_ask():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data'}), 400
+
+    post_id = data.get('post_id')
+    selected_text = data.get('selected_text', '').strip()
+    question = data.get('question', '').strip()
+
+    if not post_id or not question:
+        return jsonify({'error': '질문을 입력해주세요.'}), 400
+
+    post = StudyPost.query.get(post_id)
+    if not post or post.user_id != current_user.id:
+        return jsonify({'error': '접근 권한이 없습니다.'}), 403
+
+    ai_answer = answer_question(selected_text, question, post.original_content)
+
+    qa = QAEntry(
+        post_id=post.id,
+        selected_text=selected_text,
+        question=question,
+        ai_answer=ai_answer,
+    )
+    db.session.add(qa)
+    db.session.commit()
+
+    return jsonify({
+        'id': qa.id,
+        'selected_text': qa.selected_text,
+        'question': qa.question,
+        'ai_answer': qa.ai_answer,
+        'created_at': qa.created_at.strftime('%Y-%m-%d %H:%M'),
+    })
+
+
+@app.route('/api/qa/<int:qa_id>/save-note', methods=['POST'])
+@login_required
+def api_save_note(qa_id):
+    qa = QAEntry.query.get_or_404(qa_id)
+    if qa.post.user_id != current_user.id:
+        return jsonify({'error': '접근 권한이 없습니다.'}), 403
+
+    data = request.get_json()
+    qa.my_note = data.get('my_note', '')
+    qa.is_saved = True
+    db.session.commit()
+
+    return jsonify({'success': True})
+
+
+@app.route('/api/qa/<int:qa_id>/toggle-save', methods=['POST'])
+@login_required
+def api_toggle_save(qa_id):
+    qa = QAEntry.query.get_or_404(qa_id)
+    if qa.post.user_id != current_user.id:
+        return jsonify({'error': '접근 권한이 없습니다.'}), 403
+
+    qa.is_saved = not qa.is_saved
+    db.session.commit()
+
+    return jsonify({'is_saved': qa.is_saved})
+
+
+@app.route('/api/qa/<int:qa_id>', methods=['DELETE'])
+@login_required
+def api_delete_qa(qa_id):
+    qa = QAEntry.query.get_or_404(qa_id)
+    if qa.post.user_id != current_user.id:
+        return jsonify({'error': '접근 권한이 없습니다.'}), 403
+
+    db.session.delete(qa)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/api/post/<int:post_id>/update-notes', methods=['POST'])
+@login_required
+def api_update_notes(post_id):
+    post = StudyPost.query.get_or_404(post_id)
+    if post.user_id != current_user.id:
+        return jsonify({'error': '접근 권한이 없습니다.'}), 403
+
+    data = request.get_json()
+    post.study_notes = data.get('study_notes', '')
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 # ─── Profile Routes ────────────────────────────────────
@@ -248,6 +333,13 @@ def community():
     ).paginate(page=page, per_page=20, error_out=False)
 
     return render_template('community.html', posts=posts)
+
+
+# Keep old study route as redirect
+@app.route('/study/<int:post_id>')
+@login_required
+def study(post_id):
+    return redirect(url_for('workspace', post_id=post_id))
 
 
 if __name__ == '__main__':

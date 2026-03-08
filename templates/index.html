@@ -1,70 +1,35 @@
 {% extends "base.html" %}
-{% block title %}MER Study - 내 학습 노트{% endblock %}
+{% block title %}MER Study - 블로그 학습 도우미{% endblock %}
 
 {% block content %}
-{% if current_user.is_authenticated %}
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-        <h1>내 학습 노트</h1>
-        <a href="{{ url_for('add_post') }}" class="btn btn-primary">+ 새 노트</a>
+<div class="container" style="text-align: center; padding: 5rem 1.5rem;">
+    <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem; color: #1a1a2e;">MER Study</h1>
+    <p style="font-size: 1.1rem; color: #666; margin-bottom: 0.5rem;">
+        블로그 글을 읽고, AI에게 질문하고, 나만의 학습 노트를 만드세요.
+    </p>
+    <p style="color: #999; margin-bottom: 2.5rem;">
+        글 선택 &rarr; 텍스트 드래그 &rarr; AI 질문 &rarr; 답변 저장 &rarr; 내 이해 메모
+    </p>
+
+    <div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 3rem; flex-wrap: wrap;">
+        <div style="text-align: center; max-width: 200px;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">1</div>
+            <strong>블로그 글 추가</strong>
+            <p style="font-size: 0.85rem; color: #888; margin-top: 0.3rem;">URL을 입력하면 자동으로 크롤링</p>
+        </div>
+        <div style="text-align: center; max-width: 200px;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">2</div>
+            <strong>텍스트 선택 & 질문</strong>
+            <p style="font-size: 0.85rem; color: #888; margin-top: 0.3rem;">궁금한 부분을 드래그하여 AI에게 질문</p>
+        </div>
+        <div style="text-align: center; max-width: 200px;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">3</div>
+            <strong>답변 저장 & 메모</strong>
+            <p style="font-size: 0.85rem; color: #888; margin-top: 0.3rem;">AI 답변과 나의 이해를 함께 저장</p>
+        </div>
     </div>
 
-    <form method="GET" style="margin-bottom: 1.5rem;">
-        <input type="text" name="search" placeholder="제목, 태그, 내용으로 검색..." value="{{ search }}"
-               style="margin-bottom: 0;">
-    </form>
-
-    {% if posts and posts.items %}
-        {% for post in posts.items %}
-        <div class="card">
-            <h3><a href="{{ url_for('study', post_id=post.id) }}" style="color: #2c3e50; text-decoration: none;">{{ post.title }}</a></h3>
-            {% if post.summary %}
-                <p style="margin: 0.5rem 0; color: #666;">{{ post.summary[:150] }}{% if post.summary|length > 150 %}...{% endif %}</p>
-            {% endif %}
-            <div>
-                {% for tag in post.get_tags_list() %}
-                    <span class="tag">{{ tag }}</span>
-                {% endfor %}
-            </div>
-            <p class="meta" style="margin-top: 0.5rem;">{{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
-        </div>
-        {% endfor %}
-
-        {% if posts.pages > 1 %}
-        <div class="pagination">
-            {% if posts.has_prev %}
-                <a href="{{ url_for('index', page=posts.prev_num, search=search) }}">&laquo; 이전</a>
-            {% endif %}
-            {% for p in posts.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-                {% if p %}
-                    {% if p == posts.page %}
-                        <span class="current">{{ p }}</span>
-                    {% else %}
-                        <a href="{{ url_for('index', page=p, search=search) }}">{{ p }}</a>
-                    {% endif %}
-                {% else %}
-                    <span>...</span>
-                {% endif %}
-            {% endfor %}
-            {% if posts.has_next %}
-                <a href="{{ url_for('index', page=posts.next_num, search=search) }}">다음 &raquo;</a>
-            {% endif %}
-        </div>
-        {% endif %}
-    {% else %}
-        <div class="card" style="text-align: center; padding: 3rem;">
-            <h3>아직 학습 노트가 없습니다</h3>
-            <p style="margin: 1rem 0; color: #888;">블로그 URL을 입력하거나 직접 노트를 작성해보세요.</p>
-            <a href="{{ url_for('add_post') }}" class="btn btn-primary">첫 노트 만들기</a>
-        </div>
-    {% endif %}
-{% else %}
-    <div style="text-align: center; padding: 4rem 0;">
-        <h1 style="font-size: 2.5rem; margin-bottom: 1rem;">MER Study</h1>
-        <p style="font-size: 1.2rem; color: #666; margin-bottom: 2rem;">
-            블로그 글을 스크래핑하고 학습 노트로 정리하세요.
-        </p>
-        <a href="{{ url_for('register') }}" class="btn btn-primary" style="font-size: 1.1rem; padding: 0.8rem 2rem;">시작하기</a>
-        <a href="{{ url_for('login') }}" class="btn btn-secondary" style="font-size: 1.1rem; padding: 0.8rem 2rem; margin-left: 0.5rem;">로그인</a>
-    </div>
-{% endif %}
+    <a href="{{ url_for('register') }}" class="btn btn-primary" style="font-size: 1.1rem; padding: 0.8rem 2.5rem;">시작하기</a>
+    <a href="{{ url_for('login') }}" class="btn btn-secondary" style="font-size: 1.1rem; padding: 0.8rem 2.5rem; margin-left: 0.5rem;">로그인</a>
+</div>
 {% endblock %}

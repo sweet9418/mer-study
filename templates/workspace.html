@@ -1,0 +1,621 @@
+{% extends "base.html" %}
+{% block title %}학습공간 - MER Study{% endblock %}
+
+{% block extra_style %}
+<style>
+    .workspace {
+        display: flex;
+        height: calc(100vh - 52px);
+        overflow: hidden;
+    }
+
+    /* ─── Left Panel: Post List ─── */
+    .panel-left {
+        width: 260px;
+        min-width: 260px;
+        background: #16213e;
+        color: #ccc;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid #0f3460;
+    }
+    .panel-left-header {
+        padding: 0.8rem 1rem;
+        border-bottom: 1px solid #0f3460;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .panel-left-header h3 { font-size: 0.9rem; color: #4fc3f7; }
+    .panel-left-header a {
+        background: #4fc3f7;
+        color: #16213e;
+        padding: 0.25rem 0.6rem;
+        border-radius: 4px;
+        text-decoration: none;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .post-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.5rem;
+    }
+    .post-item {
+        display: block;
+        padding: 0.7rem 0.8rem;
+        border-radius: 6px;
+        margin-bottom: 0.3rem;
+        cursor: pointer;
+        text-decoration: none;
+        color: #ccc;
+        font-size: 0.85rem;
+        transition: background 0.15s;
+    }
+    .post-item:hover { background: #1a2744; }
+    .post-item.active { background: #0f3460; color: #4fc3f7; }
+    .post-item .post-title {
+        display: block;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .post-item .post-date {
+        font-size: 0.7rem;
+        color: #777;
+        margin-top: 0.2rem;
+    }
+    .post-item .post-tags { margin-top: 0.2rem; }
+    .post-item .tag {
+        background: rgba(79, 195, 247, 0.15);
+        color: #4fc3f7;
+        font-size: 0.65rem;
+        padding: 0.1rem 0.35rem;
+    }
+
+    /* ─── Center Panel: Content ─── */
+    .panel-center {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: #fafbfc;
+    }
+    .panel-center-header {
+        padding: 0.8rem 1.2rem;
+        border-bottom: 1px solid #e0e0e0;
+        background: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .panel-center-header h2 {
+        font-size: 1.1rem;
+        color: #1a1a2e;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 70%;
+    }
+    .content-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.2rem;
+    }
+    .content-text {
+        font-size: 0.92rem;
+        line-height: 1.8;
+        color: #444;
+        white-space: pre-wrap;
+    }
+    .selection-hint {
+        background: #e3f2fd;
+        color: #1565c0;
+        padding: 0.6rem 1rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+
+    /* Question bar */
+    .question-bar {
+        padding: 0.8rem 1.2rem;
+        border-top: 1px solid #e0e0e0;
+        background: white;
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-end;
+    }
+    .question-bar textarea {
+        flex: 1;
+        min-height: 40px;
+        max-height: 100px;
+        margin-bottom: 0;
+        resize: none;
+        font-size: 0.85rem;
+        padding: 0.5rem 0.7rem;
+    }
+    .question-bar .selected-preview {
+        font-size: 0.75rem;
+        color: #888;
+        padding: 0.3rem 0;
+    }
+    .question-input-area { flex: 1; }
+
+    /* ─── Right Panel: AI & Notes ─── */
+    .panel-right {
+        width: 340px;
+        min-width: 340px;
+        background: white;
+        border-left: 1px solid #e0e0e0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .panel-right-tabs {
+        display: flex;
+        border-bottom: 1px solid #e0e0e0;
+        flex-shrink: 0;
+    }
+    .panel-right-tabs button {
+        flex: 1;
+        padding: 0.7rem;
+        border: none;
+        background: #f5f5f5;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: #666;
+        transition: all 0.2s;
+    }
+    .panel-right-tabs button.active {
+        background: white;
+        color: #4fc3f7;
+        border-bottom: 2px solid #4fc3f7;
+    }
+    .tab-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* QA Card */
+    .qa-card {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 0.8rem;
+        margin-bottom: 0.8rem;
+        border-left: 3px solid #4fc3f7;
+    }
+    .qa-card.saved { border-left-color: #4caf50; }
+    .qa-selected {
+        font-size: 0.75rem;
+        color: #888;
+        background: #f0f0f0;
+        padding: 0.3rem 0.5rem;
+        border-radius: 4px;
+        margin-bottom: 0.4rem;
+        font-style: italic;
+    }
+    .qa-question {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #1a1a2e;
+        margin-bottom: 0.4rem;
+    }
+    .qa-answer {
+        font-size: 0.83rem;
+        color: #444;
+        line-height: 1.6;
+        white-space: pre-wrap;
+    }
+    .qa-actions {
+        margin-top: 0.5rem;
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+    }
+    .qa-note-input {
+        width: 100%;
+        min-height: 50px;
+        margin-top: 0.4rem;
+        font-size: 0.8rem;
+    }
+
+    /* Notes tab */
+    .notes-area {
+        width: 100%;
+        min-height: 300px;
+        font-size: 0.85rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 0.7rem;
+        resize: vertical;
+        margin-bottom: 0;
+    }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #999;
+    }
+    .empty-state h3 { margin-bottom: 0.5rem; color: #666; }
+
+    /* Loading spinner */
+    .loading {
+        display: inline-block;
+        width: 16px; height: 16px;
+        border: 2px solid #ddd;
+        border-top: 2px solid #4fc3f7;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Post list scrollbar */
+    .post-list::-webkit-scrollbar { width: 5px; }
+    .post-list::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+    .content-body::-webkit-scrollbar { width: 6px; }
+    .content-body::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+    .tab-content::-webkit-scrollbar { width: 5px; }
+    .tab-content::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="workspace">
+    <!-- ─── Left Panel: Post List ─── -->
+    <div class="panel-left">
+        <div class="panel-left-header">
+            <h3>내 글 목록</h3>
+            <a href="{{ url_for('add_post') }}">+ 추가</a>
+        </div>
+        <div class="post-list">
+            {% if posts %}
+                {% for post in posts %}
+                <a href="{{ url_for('workspace', post_id=post.id) }}"
+                   class="post-item {% if active_post and active_post.id == post.id %}active{% endif %}">
+                    <span class="post-title">{{ post.title }}</span>
+                    <div class="post-date">{{ post.created_at.strftime('%m/%d %H:%M') }}</div>
+                    {% if post.get_tags_list() %}
+                    <div class="post-tags">
+                        {% for tag in post.get_tags_list()[:3] %}
+                            <span class="tag">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </a>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state" style="padding: 2rem 1rem;">
+                    <p style="font-size: 0.85rem;">아직 글이 없습니다</p>
+                    <a href="{{ url_for('add_post') }}" style="color: #4fc3f7; font-size: 0.85rem;">첫 글 추가하기</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ─── Center Panel: Content ─── -->
+    <div class="panel-center">
+        {% if active_post %}
+        <div class="panel-center-header">
+            <h2>{{ active_post.title }}</h2>
+            <div>
+                {% if active_post.source_url %}
+                <a href="{{ active_post.source_url }}" target="_blank" class="btn btn-sm btn-secondary" style="margin-right: 0.3rem;">원본</a>
+                {% endif %}
+                <form method="POST" action="{{ url_for('delete_post', post_id=active_post.id) }}"
+                      onsubmit="return confirm('정말 삭제하시겠습니까?');" style="display: inline;">
+                    <button type="submit" class="btn btn-sm btn-danger">삭제</button>
+                </form>
+            </div>
+        </div>
+        <div class="content-body" id="contentBody">
+            <div class="selection-hint">
+                텍스트를 드래그하여 선택한 후 아래에서 질문하세요
+            </div>
+            {% if active_post.summary %}
+            <div style="background: #fff3e0; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.85rem;">
+                <strong style="color: #e65100;">요약:</strong>
+                <span style="color: #555;">{{ active_post.summary }}</span>
+            </div>
+            {% endif %}
+            <div class="content-text" id="contentText">{{ active_post.original_content or active_post.study_notes or '(내용 없음)' }}</div>
+        </div>
+
+        <!-- Question Bar -->
+        <div class="question-bar">
+            <div class="question-input-area">
+                <div id="selectedPreview" class="selected-preview" style="display: none;"></div>
+                <textarea id="questionInput" placeholder="선택한 텍스트에 대해 질문하세요... (Ctrl+Enter로 전송)" rows="1"></textarea>
+            </div>
+            <button id="askBtn" class="btn btn-primary" onclick="askQuestion()" style="margin-bottom: 0; height: 40px;">
+                질문하기
+            </button>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding-top: 5rem;">
+            <h3>글을 선택하세요</h3>
+            <p>왼쪽에서 글을 선택하거나 새 글을 추가하세요.</p>
+            <a href="{{ url_for('add_post') }}" class="btn btn-primary" style="margin-top: 1rem;">+ 글 추가</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ─── Right Panel: AI Answers & Notes ─── -->
+    <div class="panel-right">
+        <div class="panel-right-tabs">
+            <button class="active" onclick="switchTab('qa')">AI 질문/답변</button>
+            <button onclick="switchTab('saved')">저장된 메모</button>
+            <button onclick="switchTab('notes')">내 노트</button>
+        </div>
+
+        <!-- QA Tab -->
+        <div id="tab-qa" class="tab-content tab-panel active">
+            <div id="qaList">
+                {% if active_post %}
+                    {% for qa in qa_entries %}
+                    <div class="qa-card {% if qa.is_saved %}saved{% endif %}" id="qa-{{ qa.id }}">
+                        {% if qa.selected_text %}
+                        <div class="qa-selected">"{{ qa.selected_text[:80] }}{% if qa.selected_text|length > 80 %}...{% endif %}"</div>
+                        {% endif %}
+                        <div class="qa-question">Q: {{ qa.question }}</div>
+                        <div class="qa-answer">{{ qa.ai_answer }}</div>
+                        <div class="qa-actions">
+                            <button class="btn btn-sm {% if qa.is_saved %}btn-primary{% else %}btn-secondary{% endif %}"
+                                    onclick="toggleSave({{ qa.id }})">
+                                {% if qa.is_saved %}저장됨{% else %}저장{% endif %}
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="showNoteInput({{ qa.id }})">메모</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteQA({{ qa.id }})">삭제</button>
+                        </div>
+                        <div id="noteArea-{{ qa.id }}" style="display: {% if qa.my_note %}block{% else %}none{% endif %};">
+                            <textarea class="qa-note-input" id="noteInput-{{ qa.id }}"
+                                      placeholder="이 답변에 대한 내 이해를 메모하세요...">{{ qa.my_note or '' }}</textarea>
+                            <button class="btn btn-sm btn-primary" onclick="saveNote({{ qa.id }})" style="margin-top: 0.3rem;">메모 저장</button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% if not qa_entries %}
+                    <div class="empty-state">
+                        <p style="font-size: 0.85rem; color: #999;">
+                            아직 질문이 없습니다.<br>
+                            글에서 텍스트를 선택하고 질문해보세요!
+                        </p>
+                    </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Saved Tab -->
+        <div id="tab-saved" class="tab-content tab-panel">
+            {% if active_post %}
+                {% for qa in qa_entries if qa.is_saved %}
+                <div class="qa-card saved">
+                    <div class="qa-question">Q: {{ qa.question }}</div>
+                    <div class="qa-answer">{{ qa.ai_answer }}</div>
+                    {% if qa.my_note %}
+                    <div style="margin-top: 0.5rem; padding: 0.5rem; background: #e8f5e9; border-radius: 4px; font-size: 0.8rem;">
+                        <strong>내 메모:</strong> {{ qa.my_note }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p style="font-size: 0.85rem; color: #999;">저장된 메모가 없습니다.</p>
+                </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <!-- Notes Tab -->
+        <div id="tab-notes" class="tab-content tab-panel">
+            {% if active_post %}
+            <textarea class="notes-area" id="studyNotes"
+                      placeholder="이 글에 대한 자유 메모를 작성하세요...">{{ active_post.study_notes or '' }}</textarea>
+            <button class="btn btn-primary" onclick="saveStudyNotes()" style="margin-top: 0.5rem; width: 100%;">노트 저장</button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+const POST_ID = {{ active_post.id if active_post else 'null' }};
+let selectedText = '';
+
+// ─── Text Selection ───
+document.addEventListener('mouseup', function() {
+    const sel = window.getSelection();
+    const text = sel.toString().trim();
+    const preview = document.getElementById('selectedPreview');
+    if (text && text.length > 0) {
+        selectedText = text;
+        if (preview) {
+            preview.style.display = 'block';
+            const display = text.length > 60 ? text.substring(0, 60) + '...' : text;
+            preview.textContent = '선택: "' + display + '"';
+        }
+    }
+});
+
+// ─── Tab Switching ───
+function switchTab(tabName) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.panel-right-tabs button').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tabName).classList.add('active');
+    event.target.classList.add('active');
+}
+
+// ─── Ask Question ───
+async function askQuestion() {
+    const input = document.getElementById('questionInput');
+    const question = input.value.trim();
+    if (!question || !POST_ID) return;
+
+    const btn = document.getElementById('askBtn');
+    btn.innerHTML = '<span class="loading"></span>';
+    btn.disabled = true;
+
+    try {
+        const resp = await fetch('/api/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                post_id: POST_ID,
+                selected_text: selectedText,
+                question: question
+            })
+        });
+        const data = await resp.json();
+
+        if (resp.ok) {
+            const qaList = document.getElementById('qaList');
+            // Remove empty state if present
+            const emptyState = qaList.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            const card = document.createElement('div');
+            card.className = 'qa-card';
+            card.id = 'qa-' + data.id;
+            card.innerHTML = `
+                ${data.selected_text ? `<div class="qa-selected">"${data.selected_text.substring(0, 80)}${data.selected_text.length > 80 ? '...' : ''}"</div>` : ''}
+                <div class="qa-question">Q: ${escapeHtml(data.question)}</div>
+                <div class="qa-answer">${escapeHtml(data.ai_answer)}</div>
+                <div class="qa-actions">
+                    <button class="btn btn-sm btn-secondary" onclick="toggleSave(${data.id})">저장</button>
+                    <button class="btn btn-sm btn-secondary" onclick="showNoteInput(${data.id})">메모</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteQA(${data.id})">삭제</button>
+                </div>
+                <div id="noteArea-${data.id}" style="display: none;">
+                    <textarea class="qa-note-input" id="noteInput-${data.id}"
+                              placeholder="이 답변에 대한 내 이해를 메모하세요..."></textarea>
+                    <button class="btn btn-sm btn-primary" onclick="saveNote(${data.id})" style="margin-top: 0.3rem;">메모 저장</button>
+                </div>
+            `;
+            qaList.insertBefore(card, qaList.firstChild);
+
+            input.value = '';
+            selectedText = '';
+            const preview = document.getElementById('selectedPreview');
+            if (preview) preview.style.display = 'none';
+
+            // Switch to QA tab
+            switchTabDirect('qa');
+        } else {
+            alert(data.error || '오류가 발생했습니다.');
+        }
+    } catch (e) {
+        alert('네트워크 오류가 발생했습니다.');
+    } finally {
+        btn.innerHTML = '질문하기';
+        btn.disabled = false;
+    }
+}
+
+function switchTabDirect(tabName) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.panel-right-tabs button').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tabName).classList.add('active');
+    document.querySelectorAll('.panel-right-tabs button')[tabName === 'qa' ? 0 : tabName === 'saved' ? 1 : 2].classList.add('active');
+}
+
+// ─── Toggle Save ───
+async function toggleSave(qaId) {
+    try {
+        const resp = await fetch(`/api/qa/${qaId}/toggle-save`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) {
+            const card = document.getElementById('qa-' + qaId);
+            const btn = card.querySelector('.qa-actions button');
+            if (data.is_saved) {
+                card.classList.add('saved');
+                btn.textContent = '저장됨';
+                btn.className = 'btn btn-sm btn-primary';
+            } else {
+                card.classList.remove('saved');
+                btn.textContent = '저장';
+                btn.className = 'btn btn-sm btn-secondary';
+            }
+        }
+    } catch (e) {}
+}
+
+// ─── Show Note Input ───
+function showNoteInput(qaId) {
+    const area = document.getElementById('noteArea-' + qaId);
+    area.style.display = area.style.display === 'none' ? 'block' : 'none';
+}
+
+// ─── Save Note ───
+async function saveNote(qaId) {
+    const note = document.getElementById('noteInput-' + qaId).value;
+    try {
+        const resp = await fetch(`/api/qa/${qaId}/save-note`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ my_note: note })
+        });
+        if (resp.ok) {
+            const card = document.getElementById('qa-' + qaId);
+            card.classList.add('saved');
+            const btn = card.querySelector('.qa-actions button');
+            btn.textContent = '저장됨';
+            btn.className = 'btn btn-sm btn-primary';
+            alert('메모가 저장되었습니다!');
+        }
+    } catch (e) {}
+}
+
+// ─── Delete QA ───
+async function deleteQA(qaId) {
+    if (!confirm('이 질문/답변을 삭제하시겠습니까?')) return;
+    try {
+        const resp = await fetch(`/api/qa/${qaId}`, { method: 'DELETE' });
+        if (resp.ok) {
+            document.getElementById('qa-' + qaId).remove();
+        }
+    } catch (e) {}
+}
+
+// ─── Save Study Notes ───
+async function saveStudyNotes() {
+    if (!POST_ID) return;
+    const notes = document.getElementById('studyNotes').value;
+    try {
+        const resp = await fetch(`/api/post/${POST_ID}/update-notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ study_notes: notes })
+        });
+        if (resp.ok) alert('노트가 저장되었습니다!');
+    } catch (e) {}
+}
+
+// ─── Ctrl+Enter to submit ───
+document.getElementById('questionInput')?.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'Enter') {
+        askQuestion();
+    }
+});
+
+// ─── Auto-resize textarea ───
+document.getElementById('questionInput')?.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+});
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

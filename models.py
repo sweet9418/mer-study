@@ -39,3 +39,19 @@ class StudyPost(db.Model):
 
     def __repr__(self):
         return f'<StudyPost {self.title}>'
+
+
+class QAEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('study_post.id'), nullable=False)
+    selected_text = db.Column(db.Text, default='')
+    question = db.Column(db.Text, nullable=False)
+    ai_answer = db.Column(db.Text, default='')
+    my_note = db.Column(db.Text, default='')
+    is_saved = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    post = db.relationship('StudyPost', backref=db.backref('qa_entries', lazy=True, order_by='QAEntry.created_at.desc()'))
+
+    def __repr__(self):
+        return f'<QAEntry {self.id}>'
