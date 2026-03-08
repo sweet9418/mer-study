@@ -309,10 +309,16 @@
                 {% if active_post.source_url %}
                 <a href="{{ active_post.source_url }}" target="_blank" class="btn btn-sm btn-secondary" style="margin-right: 0.3rem;">원본</a>
                 {% endif %}
+                {% if active_post.user_id == current_user.id %}
+                <button id="shareBtn" class="btn btn-sm {% if active_post.is_shared %}btn-primary{% else %}btn-secondary{% endif %}"
+                        onclick="toggleShare()" style="margin-right: 0.3rem;">
+                    {% if active_post.is_shared %}공유중{% else %}공유{% endif %}
+                </button>
                 <form method="POST" action="{{ url_for('delete_post', post_id=active_post.id) }}"
                       onsubmit="return confirm('정말 삭제하시겠습니까?');" style="display: inline;">
                     <button type="submit" class="btn btn-sm btn-danger">삭제</button>
                 </form>
+                {% endif %}
             </div>
         </div>
         <div class="content-body" id="contentBody">
@@ -350,9 +356,10 @@
     <!-- ─── Right Panel: AI Answers & Notes ─── -->
     <div class="panel-right">
         <div class="panel-right-tabs">
-            <button class="active" onclick="switchTab('qa')">AI 질문/답변</button>
-            <button onclick="switchTab('saved')">저장된 메모</button>
+            <button class="active" onclick="switchTab('qa')">AI Q&A</button>
+            <button onclick="switchTab('saved')">저장됨</button>
             <button onclick="switchTab('notes')">내 노트</button>
+            <button onclick="switchTab('comments')">댓글</button>
         </div>
 
         <!-- QA Tab -->
@@ -420,6 +427,42 @@
             <textarea class="notes-area" id="studyNotes"
                       placeholder="이 글에 대한 자유 메모를 작성하세요...">{{ active_post.study_notes or '' }}</textarea>
             <button class="btn btn-primary" onclick="saveStudyNotes()" style="margin-top: 0.5rem; width: 100%;">노트 저장</button>
+            {% endif %}
+        </div>
+
+        <!-- Comments Tab -->
+        <div id="tab-comments" class="tab-content tab-panel">
+            {% if active_post %}
+                {% if active_post.is_shared %}
+                <div id="commentList">
+                    {% for c in comments %}
+                    <div class="qa-card" id="comment-{{ c.id }}" style="border-left-color: #ff7043;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong style="font-size: 0.8rem; color: #1a1a2e;">{{ c.user.username }}</strong>
+                            <span style="font-size: 0.7rem; color: #999;">{{ c.created_at.strftime('%m/%d %H:%M') }}</span>
+                        </div>
+                        <div style="font-size: 0.83rem; color: #444; margin-top: 0.3rem; white-space: pre-wrap;">{{ c.content }}</div>
+                        {% if c.user_id == current_user.id %}
+                        <button class="btn btn-sm btn-danger" onclick="deleteComment({{ c.id }})" style="margin-top: 0.3rem;">삭제</button>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    {% if not comments %}
+                    <p style="font-size: 0.85rem; color: #999; text-align: center; padding: 1rem;">아직 댓글이 없습니다.</p>
+                    {% endif %}
+                </div>
+                <form method="POST" action="{{ url_for('add_comment', post_id=active_post.id) }}" style="margin-top: 0.5rem;">
+                    <textarea name="content" placeholder="댓글을 남겨보세요..." style="min-height: 60px; font-size: 0.85rem;"></textarea>
+                    <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;">댓글 남기기</button>
+                </form>
+                {% else %}
+                <div style="text-align: center; padding: 2rem 1rem; color: #999;">
+                    <p style="font-size: 0.85rem;">이 노트를 공유하면 다른 회원들이 댓글을 남길 수 있습니다.</p>
+                    {% if active_post.user_id == current_user.id %}
+                    <button class="btn btn-primary btn-sm" onclick="toggleShare()" style="margin-top: 0.5rem;">공유하기</button>
+                    {% endif %}
+                </div>
+                {% endif %}
             {% endif %}
         </div>
     </div>
@@ -524,7 +567,8 @@ function switchTabDirect(tabName) {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.panel-right-tabs button').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-' + tabName).classList.add('active');
-    document.querySelectorAll('.panel-right-tabs button')[tabName === 'qa' ? 0 : tabName === 'saved' ? 1 : 2].classList.add('active');
+    const idx = {qa: 0, saved: 1, notes: 2, comments: 3}[tabName] || 0;
+    document.querySelectorAll('.panel-right-tabs button')[idx].classList.add('active');
 }
 
 // ─── Toggle Save ───
@@ -616,6 +660,37 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ─── Toggle Share ───
+async function toggleShare() {
+    if (!POST_ID) return;
+    try {
+        const resp = await fetch(`/api/post/${POST_ID}/toggle-share`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) {
+            const btn = document.getElementById('shareBtn');
+            if (data.is_shared) {
+                btn.textContent = '공유중';
+                btn.className = 'btn btn-sm btn-primary';
+            } else {
+                btn.textContent = '공유';
+                btn.className = 'btn btn-sm btn-secondary';
+            }
+            location.reload();
+        }
+    } catch (e) {}
+}
+
+// ─── Delete Comment ───
+async function deleteComment(commentId) {
+    if (!confirm('댓글을 삭제하시겠습니까?')) return;
+    try {
+        const resp = await fetch(`/api/comment/${commentId}`, { method: 'DELETE' });
+        if (resp.ok) {
+            document.getElementById('comment-' + commentId).remove();
+        }
+    } catch (e) {}
 }
 </script>
 {% endblock %}

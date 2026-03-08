@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}북마크 - MER Study{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h1>북마크</h1>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm">대시보드로</a>
+    </div>
+
+    <!-- Add Bookmark Form -->
+    <div class="card">
+        <h3 style="margin-bottom: 0.8rem;">새 북마크 추가</h3>
+        <form method="POST" action="{{ url_for('add_bookmark') }}">
+            <div style="display: flex; gap: 0.8rem; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                    <label for="title">제목</label>
+                    <input type="text" id="title" name="title" placeholder="북마크 제목" required>
+                </div>
+                <div style="flex: 2; min-width: 250px;">
+                    <label for="url">URL</label>
+                    <input type="url" id="url" name="url" placeholder="https://..." required>
+                </div>
+            </div>
+            <label for="memo">메모 (선택)</label>
+            <input type="text" id="memo" name="memo" placeholder="간단한 메모...">
+            <button type="submit" class="btn btn-primary">추가</button>
+        </form>
+    </div>
+
+    <!-- Bookmark List -->
+    {% if bookmarks %}
+        {% for bm in bookmarks %}
+        <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1; min-width: 0;">
+                <h3 style="font-size: 0.95rem;">
+                    <a href="{{ bm.url }}" target="_blank" rel="noopener" style="color: #1565c0; text-decoration: none;">{{ bm.title }}</a>
+                </h3>
+                <p class="meta" style="margin-top: 0.2rem;">
+                    {{ bm.url[:60] }}{% if bm.url|length > 60 %}...{% endif %}
+                    &middot; {{ bm.created_at.strftime('%Y-%m-%d') }}
+                </p>
+                {% if bm.memo %}
+                <p style="font-size: 0.85rem; color: #666; margin-top: 0.3rem;">{{ bm.memo }}</p>
+                {% endif %}
+            </div>
+            <form method="POST" action="{{ url_for('delete_bookmark', bm_id=bm.id) }}"
+                  onsubmit="return confirm('삭제하시겠습니까?');" style="margin-left: 1rem;">
+                <button type="submit" class="btn btn-sm btn-danger">삭제</button>
+            </form>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="card" style="text-align: center; padding: 2rem;">
+            <p style="color: #999;">아직 북마크가 없습니다. 위에서 추가해보세요!</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

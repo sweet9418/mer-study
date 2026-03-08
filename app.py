@@ -1,15 +1,16 @@
 import os
+import calendar
+from datetime import datetime, date
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, StudyPost, QAEntry
+from models import db, User, StudyPost, QAEntry, Comment, Bookmark
 from crawler import crawl_url
 from ai_helper import generate_summary, generate_study_notes, suggest_tags, answer_question
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# Database configuration
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///mer_study.db')
 if database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
@@ -37,7 +38,7 @@ with app.app_context():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+        return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
@@ -66,7 +67,7 @@ def register():
 
         login_user(user)
         flash('회원가입이 완료되었습니다!', 'success')
-        return redirect(url_for('index'))
+        return redirect(url_for('dashboard'))
 
     return render_template('register.html')
 
@@ -74,7 +75,7 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+        return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
@@ -85,7 +86,7 @@ def login():
             login_user(user)
             flash('로그인 되었습니다!', 'success')
             next_page = request.args.get('next')
-            return redirect(next_page or url_for('index'))
+            return redirect(next_page or url_for('dashboard'))
 
         flash('사용자명 또는 비밀번호가 올바르지 않습니다.', 'error')
 
@@ -105,9 +106,81 @@ def logout():
 @app.route('/')
 def index():
     if current_user.is_authenticated:
-        return redirect(url_for('workspace'))
+        return redirect(url_for('dashboard'))
     return render_template('index.html')
 
+
+# ─── Dashboard (Calendar View) ─────────────────────────
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    year = request.args.get('year', date.today().year, type=int)
+    month = request.args.get('month', date.today().month, type=int)
+
+    if month < 1:
+        month = 12
+        year -= 1
+    elif month > 12:
+        month = 1
+        year += 1
+
+    cal = calendar.Calendar(firstweekday=6)  # Sunday first
+    month_days = cal.monthdayscalendar(year, month)
+
+    posts = StudyPost.query.filter_by(user_id=current_user.id).all()
+
+    # day -> list of posts for this month
+    day_posts = {}
+    for post in posts:
+        d = post.created_at.date()
+        if d.year == year and d.month == month:
+            day_posts.setdefault(d.day, []).append(post)
+
+    # Streak calculation
+    study_dates = set()
+    for post in posts:
+        study_dates.add(post.created_at.date())
+
+    total_posts = len(posts)
+    this_month_count = sum(len(v) for v in day_posts.values())
+    streak = _calc_streak(study_dates)
+
+    bookmarks = Bookmark.query.filter_by(user_id=current_user.id).order_by(
+        Bookmark.created_at.desc()
+    ).limit(10).all()
+
+    recent_shared = StudyPost.query.filter(
+        StudyPost.is_shared == True,
+        StudyPost.user_id != current_user.id
+    ).order_by(StudyPost.updated_at.desc()).limit(5).all()
+
+    return render_template('dashboard.html',
+                           year=year, month=month,
+                           month_days=month_days,
+                           day_posts=day_posts,
+                           today=date.today(),
+                           total_posts=total_posts,
+                           this_month_count=this_month_count,
+                           streak=streak,
+                           bookmarks=bookmarks,
+                           recent_shared=recent_shared,
+                           month_name=f'{year}년 {month}월')
+
+
+def _calc_streak(study_dates):
+    if not study_dates:
+        return 0
+    today = date.today()
+    streak = 0
+    d = today
+    while d in study_dates:
+        streak += 1
+        d = date.fromordinal(d.toordinal() - 1)
+    return streak
+
+
+# ─── Workspace (3-column) ──────────────────────────────
 
 @app.route('/workspace')
 @login_required
@@ -123,7 +196,8 @@ def workspace():
     if post_id:
         active_post = StudyPost.query.get(post_id)
         if active_post and active_post.user_id != current_user.id:
-            active_post = None
+            if not active_post.is_shared:
+                active_post = None
         if active_post:
             qa_entries = QAEntry.query.filter_by(post_id=active_post.id).order_by(
                 QAEntry.created_at.desc()
@@ -134,7 +208,14 @@ def workspace():
             QAEntry.created_at.desc()
         ).all()
 
-    return render_template('workspace.html', posts=posts, active_post=active_post, qa_entries=qa_entries)
+    comments = []
+    if active_post:
+        comments = Comment.query.filter_by(post_id=active_post.id).order_by(
+            Comment.created_at.asc()
+        ).all()
+
+    return render_template('workspace.html', posts=posts, active_post=active_post,
+                           qa_entries=qa_entries, comments=comments)
 
 
 @app.route('/add', methods=['GET', 'POST'])
@@ -191,11 +272,112 @@ def delete_post(post_id):
         flash('접근 권한이 없습니다.', 'error')
         return redirect(url_for('workspace'))
 
+    Comment.query.filter_by(post_id=post.id).delete()
     QAEntry.query.filter_by(post_id=post.id).delete()
     db.session.delete(post)
     db.session.commit()
     flash('삭제되었습니다.', 'success')
     return redirect(url_for('workspace'))
+
+
+# ─── Sharing & Comments ───────────────────────────────
+
+@app.route('/api/post/<int:post_id>/toggle-share', methods=['POST'])
+@login_required
+def api_toggle_share(post_id):
+    post = StudyPost.query.get_or_404(post_id)
+    if post.user_id != current_user.id:
+        return jsonify({'error': '접근 권한이 없습니다.'}), 403
+    post.is_shared = not post.is_shared
+    db.session.commit()
+    return jsonify({'is_shared': post.is_shared})
+
+
+@app.route('/shared/<int:post_id>')
+def view_shared(post_id):
+    post = StudyPost.query.get_or_404(post_id)
+    if not post.is_shared:
+        flash('공유되지 않은 노트입니다.', 'error')
+        return redirect(url_for('index'))
+
+    comments = Comment.query.filter_by(post_id=post.id).order_by(
+        Comment.created_at.asc()
+    ).all()
+
+    return render_template('shared_note.html', post=post, comments=comments)
+
+
+@app.route('/shared/<int:post_id>/comment', methods=['POST'])
+@login_required
+def add_comment(post_id):
+    post = StudyPost.query.get_or_404(post_id)
+    if not post.is_shared:
+        flash('공유되지 않은 노트입니다.', 'error')
+        return redirect(url_for('index'))
+
+    content = request.form.get('content', '').strip()
+    if not content:
+        flash('댓글 내용을 입력해주세요.', 'error')
+        return redirect(url_for('view_shared', post_id=post_id))
+
+    comment = Comment(post_id=post.id, user_id=current_user.id, content=content)
+    db.session.add(comment)
+    db.session.commit()
+    flash('댓글이 등록되었습니다!', 'success')
+    return redirect(url_for('view_shared', post_id=post_id))
+
+
+@app.route('/api/comment/<int:comment_id>', methods=['DELETE'])
+@login_required
+def api_delete_comment(comment_id):
+    comment = Comment.query.get_or_404(comment_id)
+    if comment.user_id != current_user.id:
+        return jsonify({'error': '접근 권한이 없습니다.'}), 403
+    db.session.delete(comment)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# ─── Bookmarks ─────────────────────────────────────────
+
+@app.route('/bookmarks')
+@login_required
+def bookmarks_page():
+    bms = Bookmark.query.filter_by(user_id=current_user.id).order_by(
+        Bookmark.created_at.desc()
+    ).all()
+    return render_template('bookmarks.html', bookmarks=bms)
+
+
+@app.route('/bookmarks/add', methods=['POST'])
+@login_required
+def add_bookmark():
+    title = request.form.get('title', '').strip()
+    url = request.form.get('url', '').strip()
+    memo = request.form.get('memo', '').strip()
+
+    if not title or not url:
+        flash('제목과 URL을 입력해주세요.', 'error')
+        return redirect(url_for('bookmarks_page'))
+
+    bm = Bookmark(user_id=current_user.id, title=title, url=url, memo=memo)
+    db.session.add(bm)
+    db.session.commit()
+    flash('북마크가 추가되었습니다!', 'success')
+    return redirect(url_for('bookmarks_page'))
+
+
+@app.route('/bookmarks/<int:bm_id>/delete', methods=['POST'])
+@login_required
+def delete_bookmark(bm_id):
+    bm = Bookmark.query.get_or_404(bm_id)
+    if bm.user_id != current_user.id:
+        flash('접근 권한이 없습니다.', 'error')
+        return redirect(url_for('bookmarks_page'))
+    db.session.delete(bm)
+    db.session.commit()
+    flash('북마크가 삭제되었습니다.', 'success')
+    return redirect(url_for('bookmarks_page'))
 
 
 # ─── API Routes (AJAX) ─────────────────────────────────
@@ -249,7 +431,6 @@ def api_save_note(qa_id):
     qa.my_note = data.get('my_note', '')
     qa.is_saved = True
     db.session.commit()
-
     return jsonify({'success': True})
 
 
@@ -262,7 +443,6 @@ def api_toggle_save(qa_id):
 
     qa.is_saved = not qa.is_saved
     db.session.commit()
-
     return jsonify({'is_saved': qa.is_saved})
 
 
@@ -313,7 +493,7 @@ def shared_profile(username):
         flash('비공개 프로필입니다.', 'error')
         return redirect(url_for('index'))
 
-    posts = StudyPost.query.filter_by(user_id=user.id).order_by(
+    posts = StudyPost.query.filter_by(user_id=user.id, is_shared=True).order_by(
         StudyPost.created_at.desc()
     ).limit(20).all()
 
@@ -325,17 +505,17 @@ def shared_profile(username):
 @app.route('/community')
 def community():
     page = request.args.get('page', 1, type=int)
-    public_users = User.query.filter_by(is_public=True).all()
-    user_ids = [u.id for u in public_users]
 
-    posts = StudyPost.query.filter(StudyPost.user_id.in_(user_ids)).order_by(
-        StudyPost.created_at.desc()
+    posts = StudyPost.query.filter(
+        StudyPost.is_shared == True
+    ).order_by(
+        StudyPost.updated_at.desc()
     ).paginate(page=page, per_page=20, error_out=False)
 
     return render_template('community.html', posts=posts)
 
 
-# Keep old study route as redirect
+# Keep old routes as redirects
 @app.route('/study/<int:post_id>')
 @login_required
 def study(post_id):

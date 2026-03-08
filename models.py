@@ -28,6 +28,7 @@ class StudyPost(db.Model):
     study_notes = db.Column(db.Text, default='')
     summary = db.Column(db.Text, default='')
     tags = db.Column(db.String(200), default='')
+    is_shared = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -55,3 +56,31 @@ class QAEntry(db.Model):
 
     def __repr__(self):
         return f'<QAEntry {self.id}>'
+
+
+class Comment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('study_post.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    post = db.relationship('StudyPost', backref=db.backref('comments', lazy=True, order_by='Comment.created_at.desc()'))
+    user = db.relationship('User', backref=db.backref('comments', lazy=True))
+
+    def __repr__(self):
+        return f'<Comment {self.id}>'
+
+
+class Bookmark(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    url = db.Column(db.String(500), nullable=False)
+    memo = db.Column(db.Text, default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref=db.backref('bookmarks', lazy=True))
+
+    def __repr__(self):
+        return f'<Bookmark {self.title}>'

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}{{ post.title }} - 공유 노트{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+                <h2 style="margin-bottom: 0.3rem;">{{ post.title }}</h2>
+                <p class="meta">
+                    {{ post.author.username }} &middot; {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}
+                    {% if post.source_url %}
+                        &middot; <a href="{{ post.source_url }}" target="_blank" rel="noopener" style="color: #4fc3f7;">원본 링크</a>
+                    {% endif %}
+                </p>
+            </div>
+            <div>
+                {% for tag in post.get_tags_list() %}
+                    <span class="tag">{{ tag }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% if post.summary %}
+    <div class="card" style="border-left: 3px solid #ff7043;">
+        <strong style="color: #e65100;">요약</strong>
+        <p style="margin-top: 0.3rem; color: #555; font-size: 0.9rem;">{{ post.summary }}</p>
+    </div>
+    {% endif %}
+
+    {% if post.study_notes %}
+    <div class="card">
+        <h3 style="margin-bottom: 0.5rem;">학습 노트</h3>
+        <div style="white-space: pre-wrap; color: #444; font-size: 0.9rem; line-height: 1.7;">{{ post.study_notes }}</div>
+    </div>
+    {% endif %}
+
+    {% if post.original_content %}
+    <div class="card">
+        <h3 style="margin-bottom: 0.5rem;">원본 콘텐츠</h3>
+        <div style="white-space: pre-wrap; color: #666; font-size: 0.85rem; max-height: 400px; overflow-y: auto;">{{ post.original_content }}</div>
+    </div>
+    {% endif %}
+
+    <!-- Comments Section -->
+    <div class="card">
+        <h3 style="margin-bottom: 0.8rem;">댓글 ({{ comments|length }})</h3>
+
+        {% for c in comments %}
+        <div style="padding: 0.7rem 0; border-bottom: 1px solid #f0f0f0;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 0.85rem;">{{ c.user.username }}</strong>
+                <span class="meta">{{ c.created_at.strftime('%m/%d %H:%M') }}</span>
+            </div>
+            <p style="margin-top: 0.3rem; font-size: 0.9rem; color: #444;">{{ c.content }}</p>
+            {% if current_user.is_authenticated and c.user_id == current_user.id %}
+            <form method="POST" action="" style="display: inline;">
+                <button type="button" class="btn btn-sm btn-danger" onclick="deleteCommentShared({{ c.id }})" style="margin-top: 0.2rem;">삭제</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        {% if not comments %}
+        <p style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">아직 댓글이 없습니다. 첫 댓글을 남겨보세요!</p>
+        {% endif %}
+
+        {% if current_user.is_authenticated %}
+        <form method="POST" action="{{ url_for('add_comment', post_id=post.id) }}" style="margin-top: 1rem;">
+            <textarea name="content" placeholder="댓글을 남겨보세요..." style="min-height: 80px;"></textarea>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">댓글 남기기</button>
+        </form>
+        {% else %}
+        <p style="text-align: center; margin-top: 1rem;">
+            <a href="{{ url_for('login') }}" style="color: #4fc3f7;">로그인</a>하면 댓글을 남길 수 있습니다.
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+async function deleteCommentShared(commentId) {
+    if (!confirm('댓글을 삭제하시겠습니까?')) return;
+    try {
+        const resp = await fetch(`/api/comment/${commentId}`, { method: 'DELETE' });
+        if (resp.ok) location.reload();
+    } catch (e) {}
+}
+</script>
+{% endblock %}
