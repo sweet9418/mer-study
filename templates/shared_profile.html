@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ user.username }}의 프로필 - MER Study{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>{{ user.username }}</h1>
+    {% if user.bio %}
+        <p style="margin-top: 0.5rem; color: #666;">{{ user.bio }}</p>
+    {% endif %}
+    <p class="meta" style="margin-top: 0.5rem;">가입일: {{ user.created_at.strftime('%Y-%m-%d') }} | 노트 {{ posts|length }}개</p>
+</div>
+
+<h2 style="margin: 1.5rem 0 1rem;">학습 노트</h2>
+
+{% if posts %}
+    {% for post in posts %}
+    <div class="card">
+        <h3>{{ post.title }}</h3>
+        {% if post.summary %}
+            <p style="margin: 0.5rem 0; color: #666;">{{ post.summary[:150] }}{% if post.summary|length > 150 %}...{% endif %}</p>
+        {% endif %}
+        <div>
+            {% for tag in post.get_tags_list() %}
+                <span class="tag">{{ tag }}</span>
+            {% endfor %}
+        </div>
+        <p class="meta" style="margin-top: 0.5rem;">{{ post.created_at.strftime('%Y-%m-%d') }}</p>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="card" style="text-align: center; padding: 2rem;">
+        <p style="color: #888;">아직 작성한 노트가 없습니다.</p>
+    </div>
+{% endif %}
+{% endblock %}

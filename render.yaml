@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: mer-study
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    plan: free
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mer-study-db
+          property: connectionString
+
+databases:
+  - name: mer-study-db
+    plan: free

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}새 노트 추가 - MER Study{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">새 학습 노트 추가</h1>
+
+<div class="card">
+    <form method="POST">
+        <label for="source_url">블로그/웹 URL (선택)</label>
+        <input type="url" id="source_url" name="source_url" placeholder="https://example.com/blog-post">
+        <p style="font-size: 0.85rem; color: #888; margin-top: -0.8rem; margin-bottom: 1rem;">
+            URL을 입력하면 자동으로 내용을 가져와 학습 노트를 생성합니다.
+        </p>
+
+        <label for="title">제목</label>
+        <input type="text" id="title" name="title" placeholder="학습 노트 제목" required>
+
+        <label for="study_notes">학습 노트</label>
+        <textarea id="study_notes" name="study_notes" placeholder="URL을 입력하면 자동 생성됩니다. 직접 작성도 가능합니다."></textarea>
+
+        <label for="tags">태그 (쉼표로 구분)</label>
+        <input type="text" id="tags" name="tags" placeholder="python, web, flask">
+
+        <button type="submit" class="btn btn-primary">저장</button>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">취소</a>
+    </form>
+</div>
+{% endblock %}

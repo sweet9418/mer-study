@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}프로필 - MER Study{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">내 프로필</h1>
+
+<div class="card">
+    <form method="POST">
+        <label>사용자명</label>
+        <input type="text" value="{{ current_user.username }}" disabled>
+
+        <label>이메일</label>
+        <input type="email" value="{{ current_user.email }}" disabled>
+
+        <label for="bio">자기소개</label>
+        <textarea id="bio" name="bio" style="min-height: 80px;">{{ current_user.bio or '' }}</textarea>
+
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" name="is_public" {% if current_user.is_public %}checked{% endif %}>
+            프로필 공개 (커뮤니티에서 내 노트를 볼 수 있습니다)
+        </label>
+        <br>
+
+        <button type="submit" class="btn btn-primary">저장</button>
+    </form>
+</div>
+
+<div class="card" style="margin-top: 1rem;">
+    <h3>통계</h3>
+    <p style="margin-top: 0.5rem;">작성한 학습 노트: <strong>{{ post_count }}개</strong></p>
+    <p>가입일: {{ current_user.created_at.strftime('%Y-%m-%d') }}</p>
+    {% if current_user.is_public %}
+        <p style="margin-top: 0.5rem;">
+            공유 링크: <a href="{{ url_for('shared_profile', username=current_user.username) }}">
+                {{ url_for('shared_profile', username=current_user.username, _external=True) }}
+            </a>
+        </p>
+    {% endif %}
+</div>
+{% endblock %}

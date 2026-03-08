@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ post.title }} - MER Study{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>{{ post.title }}</h1>
+    <form method="POST" action="{{ url_for('delete_post', post_id=post.id) }}"
+          onsubmit="return confirm('정말 삭제하시겠습니까?');" style="display: inline;">
+        <button type="submit" class="btn btn-danger">삭제</button>
+    </form>
+</div>
+
+<p class="meta">{{ post.created_at.strftime('%Y-%m-%d %H:%M') }}
+    {% if post.source_url %}
+        | <a href="{{ post.source_url }}" target="_blank" rel="noopener">원본 링크</a>
+    {% endif %}
+</p>
+
+{% if post.summary %}
+<div class="card" style="margin-top: 1rem;">
+    <h3>요약</h3>
+    <p style="margin-top: 0.5rem; color: #555;">{{ post.summary }}</p>
+</div>
+{% endif %}
+
+<div class="card" style="margin-top: 1rem;">
+    <h3>학습 노트</h3>
+    <form method="POST" style="margin-top: 1rem;">
+        <textarea name="study_notes" style="min-height: 300px;">{{ post.study_notes }}</textarea>
+
+        <label for="tags">태그 (쉼표로 구분)</label>
+        <input type="text" id="tags" name="tags" value="{{ post.tags }}">
+
+        <button type="submit" class="btn btn-primary">저장</button>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">목록으로</a>
+    </form>
+</div>
+
+{% if post.original_content %}
+<div class="card" style="margin-top: 1rem;">
+    <h3>원본 콘텐츠</h3>
+    <div style="margin-top: 0.5rem; color: #666; white-space: pre-wrap; max-height: 400px; overflow-y: auto; font-size: 0.9rem;">{{ post.original_content }}</div>
+</div>
+{% endif %}
+{% endblock %}

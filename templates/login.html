@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}로그인 - MER Study{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 400px; margin: 2rem auto;">
+    <h2 style="margin-bottom: 1.5rem; text-align: center;">로그인</h2>
+    <form method="POST">
+        <label for="username">사용자명</label>
+        <input type="text" id="username" name="username" required>
+
+        <label for="password">비밀번호</label>
+        <input type="password" id="password" name="password" required>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">로그인</button>
+    </form>
+    <p style="text-align: center; margin-top: 1rem; font-size: 0.9rem;">
+        계정이 없으신가요? <a href="{{ url_for('register') }}">회원가입</a>
+    </p>
+</div>
+{% endblock %}
